@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HWPX 표 잘림 사전점검</title>
+<meta name="description" content="AI로 채운 한글(HWPX) 서식을 한글에서 열기 전에, 표가 잘리거나 파일이 안 열릴 신호를 브라우저 안에서 점검합니다. 파일은 서버로 보내지 않습니다.">
+<style>
+  :root{
+    --ink:#1b1d21; --sub:#5b616b; --line:#d9dce1; --soft:#f4f5f7;
+    --warn:#a4400f; --warnbg:#fff3ea; --note:#5a4a00; --notebg:#fdf8e3; --ok:#1f6b3a; --okbg:#eef7f0;
+    --accent:#1f3a8a;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;color:var(--ink);background:#fff;
+    font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",system-ui,sans-serif;
+    font-size:16px;line-height:1.65;word-break:keep-all;overflow-wrap:break-word}
+  main{max-width:860px;margin:0 auto;padding:48px 22px 80px}
+  h1{font-size:30px;line-height:1.3;margin:0 0 10px;letter-spacing:-0.01em}
+  h2{font-size:19px;margin:44px 0 12px}
+  p{margin:0 0 12px}
+  .lead{font-size:18px;color:var(--sub);margin-bottom:22px}
+  .mono{font-family:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;font-size:.92em}
+  a{color:var(--accent)}
+  .privacy{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:var(--soft);font-size:15px}
+  .privacy b{white-space:nowrap}
+  #drop{margin-top:18px;border:2px dashed #aab0ba;border-radius:10px;min-height:150px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:22px;cursor:pointer;background:#fff}
+  #drop.over{border-color:var(--accent);background:#f3f6ff}
+  #drop .big{font-size:18px;font-weight:600}
+  #drop .small{font-size:14px;color:var(--sub)}
+  button,.btn{font:inherit;font-size:15px;border:1px solid var(--ink);background:var(--ink);color:#fff;border-radius:7px;padding:9px 16px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;line-height:1.3}
+  button.ghost,.btn.ghost{background:#fff;color:var(--ink)}
+  button:disabled{opacity:.45;cursor:default}
+  .samples{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .samples button{font-size:14px;padding:7px 12px}
+  #status{margin-top:16px;color:var(--sub);font-size:15px;min-height:1.6em}
+  .summary{display:flex;align-items:center;gap:12px;border-radius:8px;padding:14px 16px;margin:18px 0 12px;font-weight:600}
+  .summary.warn{background:var(--warnbg);color:var(--warn)}
+  .summary.ok{background:var(--okbg);color:var(--ok)}
+  table{width:100%;border-collapse:collapse;font-size:15px}
+  th,td{border:1px solid var(--line);padding:9px 10px;vertical-align:middle;text-align:left}
+  th{background:var(--soft);font-weight:600;white-space:nowrap}
+  td.c,th.c{text-align:center}
+  .tag{display:inline-flex;align-items:center;justify-content:center;border-radius:5px;padding:2px 8px;font-size:13px;font-weight:600;white-space:nowrap}
+  .tag.hi{background:var(--warnbg);color:var(--warn)}
+  .tag.mid{background:var(--notebg);color:var(--note)}
+  .finding{border:1px solid var(--line);border-radius:9px;margin:12px 0;overflow:hidden}
+  .finding .head{display:flex;align-items:center;gap:10px;padding:11px 14px;background:var(--soft);flex-wrap:wrap}
+  .finding .head .id{color:var(--sub)}
+  .finding .body{padding:12px 14px}
+  .finding .body p{margin:0 0 8px}
+  .finding .where{font-size:14px;color:var(--sub)}
+  .honest{border-left:4px solid var(--ink);padding:10px 14px;background:var(--soft);font-size:15px;margin:14px 0}
+  .rules td:first-child{white-space:nowrap;width:52px;text-align:center}
+  .rules td:nth-child(2){width:40%}
+  fieldset{border:1px solid var(--line);border-radius:9px;padding:14px 16px;margin:0}
+  legend{padding:0 6px;font-weight:600}
+  .opts{display:flex;flex-wrap:wrap;gap:8px 18px;margin:6px 0 12px}
+  .opts label{display:inline-flex;align-items:center;gap:6px}
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:8px 0}
+  input[type=text],select{font:inherit;font-size:15px;border:1px solid #aab0ba;border-radius:6px;padding:7px 9px;min-width:220px}
+  pre.send{background:var(--soft);border:1px solid var(--line);border-radius:7px;padding:10px 12px;font-size:13px;white-space:pre-wrap;margin:10px 0}
+  footer{margin-top:56px;padding-top:18px;border-top:1px solid var(--line);font-size:14px;color:var(--sub)}
+  .hidden{display:none}
+  @media (max-width:560px){h1{font-size:25px}.privacy{flex-direction:column;align-items:flex-start;gap:4px}th{white-space:normal}.finding .head{gap:6px 10px}}
+</style>
+</head>
+<body>
+<main>
+  <h1>HWPX 표 잘림 사전점검</h1>
+  <p class="lead">AI로 채운 한글(HWPX) 서식을 한글에서 열기 전에, 표가 잘리거나 파일이 안 열릴 신호부터 봅니다.</p>
+
+  <div class="privacy"><b>파일은 밖으로 나가지 않습니다.</b><span>이 페이지는 고른 파일을 지금 쓰는 브라우저 안에서만 읽습니다. 서버로 올리지 않고, 결과를 따로 저장하지도 않습니다.</span></div>
+
+  <div id="drop" tabindex="0" role="button" aria-label="HWPX 파일 고르기">
+    <div class="big">여기에 .hwpx 파일을 끌어다 놓거나 눌러서 고르세요</div>
+    <div class="small">여러 개를 한 번에 골라도 됩니다. .hwp(옛 형식)는 한글에서 ‘다른 이름으로 저장 → HWPX’&#8288;로 바꾼 뒤 올려 주세요.</div>
+  </div>
+  <input id="file" type="file" accept=".hwpx" multiple class="hidden">
+
+  <div class="samples" aria-label="예시 파일로 먼저 해보기">
+    <span style="display:inline-flex;align-items:center;font-size:14px;color:var(--sub)">예시로 먼저 해보기:</span>
+    <button class="ghost" data-sample="01_짧은표_정상.hwpx">짧은 표</button>
+    <button class="ghost" data-sample="02_글자처럼취급_긴표.hwpx">글자처럼 취급 + 긴 칸</button>
+    <button class="ghost" data-sample="03_행단위나눔_긴행.hwpx">행 단위 나눔 + 긴 행</button>
+    <button class="ghost" data-sample="04_나누지않음_긴표.hwpx">나누지 않음 + 긴 표</button>
+    <button class="ghost" data-sample="05_섹션수_불일치.hwpx">섹션 수 불일치</button>
+  </div>
+
+  <div id="status" aria-live="polite"></div>
+  <div id="results"></div>
+
+  <section id="report" class="hidden">
+    <h2>한글에서 열어본 결과를 알려 주세요</h2>
+    <p>이 점검이 실제 한글 결과를 맞히는지 확인하려고 받습니다. 경고가 나왔든 안 나왔든, 한글에서 열어 본 뒤 알려 주시면 규칙을 고칩니다.</p>
+    <fieldset>
+      <legend>한글에서 연 결과</legend>
+      <div class="opts" id="resultOpts">
+        <label><input type="radio" name="res" value="정상"> 정상</label>
+        <label><input type="radio" name="res" value="안 열림"> 안 열림</label>
+        <label><input type="radio" name="res" value="표 잘림"> 표 잘림·쪽 밖으로 밀림</label>
+        <label><input type="radio" name="res" value="기타"> 기타</label>
+      </div>
+      <div class="row"><label for="hv">한글 버전</label>
+        <select id="hv"><option value="">고르기</option><option>한글 2024</option><option>한글 2022</option><option>한글 2020</option><option>한컴독스(웹)</option><option>그 밖</option></select></div>
+      <div class="row"><label for="tool">파일을 만든 방법</label>
+        <select id="tool"><option value="">고르기</option><option>ChatGPT</option><option>Claude</option><option>hwpx-mcp 계열</option><option>python-hwpx 직접</option><option>그 밖의 코드·도구</option><option>사람이 한글에서 직접</option></select></div>
+      <div class="row"><label for="memo">한 줄 메모(선택)</label><input id="memo" type="text" maxlength="200" placeholder="예: 3쪽 표 아래가 잘림"></div>
+      <p class="where" style="font-size:14px;color:var(--sub);margin-top:10px">보내기를 누르면 아래 내용만 담긴 창이 열립니다. 파일 이름, 본문, 그림은 담지 않습니다. 보낼지 말지는 열린 창에서 직접 정하세요.</p>
+      <pre class="send" id="sendPreview"></pre>
+      <div class="row">
+        <a id="sendGh" class="btn" target="_blank" rel="noopener">GitHub 이슈로 보내기</a>
+        <a id="sendMail" class="btn ghost">메일로 보내기</a>
+      </div>
+    </fieldset>
+  </section>
+
+  <h2>무엇을 보나요</h2>
+  <p>규칙은 만든 사람이 공모전·지원사업 서식을 AI로 채우다가 실제 한글 2024에서 겪은 실패에서 나왔고, 한글이 직접 저장한 공개 시험 파일(<a href="https://github.com/airmang/python-hwpx">python-hwpx</a>의 hancom_saved)의 기록과 맞춰 봤습니다. 지금은 세 가지만 봅니다.</p>
+  <table class="rules">
+    <thead><tr><th>규칙</th><th>보는 것</th><th>실제로 겪은 일</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">S1</td><td>문서 머리 정보가 선언한 섹션 수와 실제 들어 있는 섹션 파일 수가 다른지</td><td>섹션 5개를 선언했는데 실제로는 1개뿐인 서식이 한글에서 열리지 않았습니다.</td></tr>
+      <tr><td class="mono">T1</td><td>‘글자처럼&nbsp;취급’&#8288;으로 놓인 표가 한 쪽 높이에 가깝거나 넘는지</td><td>이렇게 놓인 표는 쪽을 넘겨 나뉘지 않아, 긴 표의 아랫부분이 종이 밖으로 잘렸습니다. 서식 6건에서 같은 일이 났습니다. 한글이 직접 저장한 공개 시험 파일의 기록도 같습니다.</td></tr>
+      <tr><td class="mono">T2</td><td>‘나누지&nbsp;않음’ 표가 한 쪽보다 긴지, ‘행&nbsp;단위로&nbsp;나눔’ 표에 한 쪽보다 긴 행이 있는지</td><td>행 단위로 넘기는 설정에서 칸 하나에 글이 많은 행이 쪽 사이에서 나뉘지 않아 내용이 사라졌습니다. ‘셀&nbsp;단위로&nbsp;나눔’&#8288;은 긴 행도 줄 사이에서 나눕니다.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="honest"><b>정직하게 말씀드리면</b><br>이 점검은 한글로 문서를 열거나 그려 보지 않습니다. 파일 속 설정값과 글자 수로 높이를 어림할 뿐이라, 경고가 있어도 정상일 수 있고 경고가 없어도 깨질 수 있습니다. 제출 전에는 반드시 한글에서 표 끝, 쪽수, 서명 위치를 직접 확인하세요.</div>
+
+  <footer>
+    만든 사람: 유병웅 (Woong Works) · <a href="https://github.com/ByungwoongYoo/hwpx-precheck">소스 보기</a> · <a href="mailto:yoonge3@gmail.com">yoonge3@gmail.com</a><br>
+    한컴오피스·한글은 한글과컴퓨터의 상표이며, 이 도구는 한글과컴퓨터와 관계가 없습니다.
+  </footer>
+</main>
+
+<script>
+(function(){
+"use strict";
+const REPO_ISSUE = "https://github.com/ByungwoongYoo/hwpx-precheck/issues/new";
+const MAIL = "yoonge3@gmail.com";
+const HU_PER_MM = 7200/25.4;
+const $ = s => document.querySelector(s);
+const drop = $("#drop"), fileIn = $("#file"), statusEl = $("#status"), resultsEl = $("#results");
+let lastRun = null;
+
+/* ---------- ZIP (read only) ---------- */
+function u16(d,o){return d[o]|(d[o+1]<<8)}
+function u32(d,o){return (d[o]|(d[o+1]<<8)|(d[o+2]<<16)|(d[o+3]<<24))>>>0}
+async function inflateRaw(bytes){
+  if(typeof DecompressionStream==="undefined") throw new Error("이 브라우저는 압축 해제를 지원하지 않습니다. 최신 크롬·엣지·사파리·파이어폭스에서 열어 주세요.");
+  const ds = new DecompressionStream("deflate-raw");
+  const out = new Blob([bytes]).stream().pipeThrough(ds);
+  return new Uint8Array(await new Response(out).arrayBuffer());
+}
+async function readZip(buf){
+  const d = new Uint8Array(buf);
+  let eocd=-1;
+  for(let i=d.length-22;i>=Math.max(0,d.length-65557);i--){ if(u32(d,i)===0x06054b50){eocd=i;break;} }
+  if(eocd<0) throw new Error("ZIP 구조를 찾지 못했습니다. HWPX 파일이 맞는지 확인해 주세요.");
+  const n=u16(d,eocd+10), cdOff=u32(d,eocd+16);
+  const entries=new Map(); let p=cdOff;
+  const dec=new TextDecoder("utf-8");
+  for(let k=0;k<n;k++){
+    if(u32(d,p)!==0x02014b50) throw new Error("ZIP 목록이 손상되어 있습니다.");
+    const method=u16(d,p+10), csize=u32(d,p+20), nlen=u16(d,p+28), elen=u16(d,p+30), clen=u16(d,p+32), loff=u32(d,p+42);
+    const name=dec.decode(d.subarray(p+46,p+46+nlen));
+    entries.set(name,{method,csize,loff});
+    p+=46+nlen+elen+clen;
+  }
+  return {
+    names:[...entries.keys()],
+    has:n=>entries.has(n),
+    async text(name){
+      const e=entries.get(name); if(!e) return null;
+      const lo=e.loff; if(u32(d,lo)!==0x04034b50) throw new Error(name+" 위치가 손상되어 있습니다.");
+      const start=lo+30+u16(d,lo+26)+u16(d,lo+28);
+      const raw=d.subarray(start,start+e.csize);
+      let bytes;
+      if(e.method===0) bytes=raw; else if(e.method===8) bytes=await inflateRaw(raw); else throw new Error(name+": 지원하지 않는 압축 방식("+e.method+")");
+      return dec.decode(bytes);
+    }
+  };
+}
+
+/* ---------- XML helpers ---------- */
+const parser = new DOMParser();
+function parseXml(t,name){
+  const doc=parser.parseFromString(t,"application/xml");
+  if(doc.getElementsByTagName("parsererror").length) throw new Error(name+" XML을 읽지 못했습니다.");
+  return doc;
+}
+const kids=(el,ln)=>[...el.children].filter(c=>c.localName===ln);
+const kid=(el,ln)=>[...el.children].find(c=>c.localName===ln)||null;
+const all=(el,ln)=>[...el.getElementsByTagNameNS("*",ln)];
+const num=(v,def)=>{let x=parseFloat(v);if(!isFinite(x))return def;if(x>=2147483648&&x<4294967296)x-=4294967296;return x;};
+const mm=hu=>hu/HU_PER_MM;
+
+/* ---------- header styles ---------- */
+function readStyles(hdoc){
+  const char={}, para={};
+  for(const c of all(hdoc,"charPr")){
+    const ratio=kid(c,"ratio"), sp=kid(c,"spacing");
+    char[c.getAttribute("id")]={h:num(c.getAttribute("height"),1000), ratio:num(ratio&&ratio.getAttribute("hangul"),100), spacing:num(sp&&sp.getAttribute("hangul"),0)};
+  }
+  for(const pp of all(hdoc,"paraPr")){
+    const pick=ln=>{const xs=all(pp,ln);return xs.find(x=>x.parentElement&&x.parentElement.localName==="default")||xs[0]||null;};
+    const ls=pick("lineSpacing"), mg=pick("margin");
+    const mv=ln=>{const e=mg?kid(mg,ln):null;return e?num(e.getAttribute("value"),0):0;};
+    para[pp.getAttribute("id")]={type:ls?ls.getAttribute("type"):"PERCENT", value:ls?num(ls.getAttribute("value"),160):160,
+      left:mv("left"), right:mv("right"), intent:mv("intent"), prev:Math.max(0,mv("prev")), next:Math.max(0,mv("next"))};
+  }
+  let secCnt=null; const head=hdoc.documentElement; if(head&&head.hasAttribute("secCnt")) secCnt=parseInt(head.getAttribute("secCnt"),10);
+  return {char,para,secCnt};
+}
+
+/* ---------- height estimate ---------- */
+function charW(ch,em){
+  const c=ch.codePointAt(0);
+  if(ch===" ") return em*0.3;
+  if((c>=0xAC00&&c<=0xD7A3)||(c>=0x3130&&c<=0x318F)||(c>=0x4E00&&c<=0x9FFF)||(c>=0x3000&&c<=0x303F)||(c>=0xFF00&&c<=0xFFEF)) return em;
+  if(c<0x80) return em*0.55;
+  return em*0.9;
+}
+function paraHeight(p,width,st){
+  const pr=st.para[p.getAttribute("paraPrIDRef")]||{type:"PERCENT",value:160,left:0,right:0,intent:0,prev:0,next:0};
+  const base=width-pr.left-pr.right;
+  const firstW=Math.max(1,base-Math.max(pr.intent,0)), restW=Math.max(1,base-Math.max(-pr.intent,0));
+  let lines=1, cur=0, maxEm=0, nested=0, w=firstW;
+  for(const run of kids(p,"run")){
+    const cp=st.char[run.getAttribute("charPrIDRef")]||{h:1000,ratio:100,spacing:0};
+    const em=cp.h; maxEm=Math.max(maxEm,em);
+    for(const ch of run.children){
+      if(ch.localName==="t"){
+        const txt=ch.textContent||"";
+        for(const g of txt){
+          if(g==="\n"){lines++;cur=0;w=restW;continue;}
+          const cw=charW(g,em)*(cp.ratio/100)+em*(cp.spacing/100);
+          cur+=cw; if(cur>w&&width>0){lines++;cur=cw;w=restW;}
+        }
+      } else if(ch.localName==="tbl"){
+        nested+=tableInfo(ch,st).height;
+      }
+    }
+  }
+  if(!maxEm) maxEm=1000;
+  const lh = pr.type==="PERCENT" ? maxEm*pr.value/100 : (pr.type==="FIXED"||pr.type==="AT_LEAST") ? Math.max(pr.value,maxEm) : maxEm*1.6+pr.value;
+  return lines*lh+nested+pr.prev+pr.next;
+}
+function tableInfo(tbl,st){
+  const pos=kid(tbl,"pos");
+  const treatAsChar=pos?pos.getAttribute("treatAsChar")==="1":false;
+  const pageBreak=tbl.getAttribute("pageBreak")||"";
+  const inM=kid(tbl,"inMargin");
+  const defM={l:num(inM&&inM.getAttribute("left"),510),r:num(inM&&inM.getAttribute("right"),510),t:num(inM&&inM.getAttribute("top"),141),b:num(inM&&inM.getAttribute("bottom"),141)};
+  const rowH={}; let firstText="";
+  for(const tr of kids(tbl,"tr")){
+    for(const tc of kids(tr,"tc")){
+      const addr=kid(tc,"cellAddr"), span=kid(tc,"cellSpan"), sz=kid(tc,"cellSz"), cm=kid(tc,"cellMargin");
+      const r=num(addr&&addr.getAttribute("rowAddr"),0), rs=Math.max(1,num(span&&span.getAttribute("rowSpan"),1));
+      const useOwn=tc.getAttribute("hasMargin")==="1"&&cm;
+      const m=useOwn?{l:num(cm.getAttribute("left"),0),r:num(cm.getAttribute("right"),0),t:num(cm.getAttribute("top"),0),b:num(cm.getAttribute("bottom"),0)}:defM;
+      const w=num(sz&&sz.getAttribute("width"),0)-m.l-m.r;
+      const sub=kid(tc,"subList");
+      let ch=0;
+      if(sub){ for(const p of kids(sub,"p")){ ch+=paraHeight(p,w,st); if(!firstText){ const t=all(p,"t").map(x=>x.textContent).join("").trim(); if(t) firstText=t; } } }
+      const need=Math.max(0,num(sz&&sz.getAttribute("height"),0), ch+Math.max(0,m.t)+Math.max(0,m.b));
+      const per=need/rs;
+      for(let k=0;k<rs;k++) rowH[r+k]=Math.max(rowH[r+k]||0,per);
+    }
+  }
+  const rows=Object.values(rowH);
+  const height=rows.reduce((a,b)=>a+b,0);
+  return {treatAsChar,pageBreak,height,maxRow:rows.length?Math.max(...rows):0,rowCount:rows.length,firstText};
+}
+function bodyHeight(sdoc){
+  const pp=all(sdoc,"pagePr")[0]; if(!pp) return null;
+  let w=num(pp.getAttribute("width"),59528), h=num(pp.getAttribute("height"),84186);
+  if(pp.getAttribute("landscape")==="NARROWLY") [w,h]=[h,w];
+  const m=kid(pp,"margin");
+  const g=a=>num(m&&m.getAttribute(a),0);
+  return h-g("top")-g("bottom")-g("header")-g("footer");
+}
+
+/* ---------- checks ---------- */
+async function checkFile(file){
+  const buf=await file.arrayBuffer();
+  const head=new Uint8Array(buf.slice(0,8));
+  if(head[0]===0xD0&&head[1]===0xCF&&head[2]===0x11&&head[3]===0xE0) return {name:file.name,error:"옛 HWP 형식입니다. 한글에서 ‘다른 이름으로 저장 → HWPX’로 저장한 뒤 다시 올려 주세요."};
+  if(!(head[0]===0x50&&head[1]===0x4B)) return {name:file.name,error:"HWPX(압축 파일) 형식이 아닙니다."};
+  const zip=await readZip(buf);
+  const findings=[];
+  const htxt=await zip.text("Contents/header.xml");
+  let st;
+  if(htxt===null){
+    st={char:{},para:{},secCnt:null};
+    findings.push({rule:"S1",level:"mid",title:"머리 정보 파일(header.xml)이 없습니다",
+      text:"글꼴·문단 모양을 담는 Contents/header.xml이 없습니다. 이런 파일을 한글이 어떻게 여는지는 아직 확인하지 못했습니다. 표 높이는 기본값(10pt, 줄간격 160%)으로 어림했습니다.",
+      where:"Contents/header.xml"});
+  } else st=readStyles(parseXml(htxt,"header.xml"));
+  const secFiles=zip.names.filter(n=>/^Contents\/section\d+\.xml$/.test(n)).sort((a,b)=>parseInt(a.match(/\d+/)[0])-parseInt(b.match(/\d+/)[0]));
+  // S1
+  let hpfSecs=null;
+  const hpf=await zip.text("Contents/content.hpf");
+  if(hpf){ const hd=parseXml(hpf,"content.hpf"); hpfSecs=all(hd,"item").map(i=>i.getAttribute("href")||"").filter(h=>/section\d+\.xml$/.test(h)); }
+  const missing=(hpfSecs||[]).filter(h=>!zip.has(h.startsWith("Contents/")?h:"Contents/"+h.replace(/^\.?\//,"")));
+  if(st.secCnt!==null&&st.secCnt!==secFiles.length){
+    findings.push({rule:"S1",level:"hi",title:"선언한 섹션 수와 실제 섹션 수가 다릅니다",
+      text:`머리 정보(header.xml)는 섹션 ${st.secCnt}개를 선언했는데, 파일 안에는 섹션 ${secFiles.length}개만 있습니다. 같은 상태의 서식이 한글에서 열리지 않은 적이 있습니다.`,
+      where:"Contents/header.xml의 secCnt 값"});
+  }
+  if(missing.length){
+    findings.push({rule:"S1",level:"hi",title:"목록에 있는 섹션 파일이 실제로 없습니다",
+      text:`content.hpf 목록에 ${missing.join(", ")}가 있지만 파일 안에 없습니다.`, where:"Contents/content.hpf"});
+  }
+  // T1/T2
+  let tcount=0, tables=0;
+  for(let si=0;si<secFiles.length;si++){
+    const sdoc=parseXml(await zip.text(secFiles[si]),secFiles[si]);
+    const body=bodyHeight(sdoc)||65762;
+    const tbls=all(sdoc,"tbl");
+    for(const tbl of tbls){
+      tcount++; tables++;
+      const nestedIn=(()=>{let e=tbl.parentElement;while(e){if(e.localName==="tbl")return true;e=e.parentElement;}return false;})();
+      const info=tableInfo(tbl,st);
+      const loc=`섹션 ${si+1} · 문서에서 ${tcount}번째 표${nestedIn?"(표 안의 표)":""} · ${info.rowCount}행 · 첫 칸 “${(info.firstText||"(빈 칸)").slice(0,24)}${(info.firstText||"").length>24?"…":""}”`;
+      const H=mm(info.height), B=mm(body), R=mm(info.maxRow);
+      const sizeTxt=`추정 높이 약 ${Math.round(H)}mm, 본문 영역 높이 약 ${Math.round(B)}mm`;
+      if(info.treatAsChar && info.height>body*0.95){
+        findings.push({rule:"T1",level:"hi",title:"‘글자처럼 취급’ 표가 한 쪽보다 길 수 있습니다",
+          text:`${sizeTxt}. 이렇게 놓인 표는 쪽을 넘겨 나뉘지 않아, 한 쪽보다 길면 아랫부분이 잘립니다. 한글에서 이 표의 ‘표/셀 속성 → 기본 → 글자처럼 취급’을 끄고, ‘쪽 경계에서’를 ‘셀 단위로 나눔’으로 두는 방법이 있습니다.`, where:loc});
+      } else if(info.treatAsChar && info.height>body*0.6){
+        findings.push({rule:"T1",level:"mid",title:"‘글자처럼 취급’ 표가 쪽의 절반 이상을 차지합니다",
+          text:`${sizeTxt}. 잘리지는 않더라도, 앞 내용이 길면 표 전체가 다음 쪽으로 넘어가 앞쪽에 큰 빈 곳이 생길 수 있습니다.`, where:loc});
+      }
+      if(!info.treatAsChar && info.pageBreak==="NONE" && info.height>body*0.95){
+        findings.push({rule:"T2",level:"hi",title:"‘나누지 않음’으로 설정된 표가 한 쪽보다 길 수 있습니다",
+          text:`${sizeTxt}. 나누지 않는 표는 통째로 다음 쪽 맨 위로 옮겨지고, 한 쪽보다 길면 쪽 아래로 넘쳐 잘립니다. 한글에서 ‘표/셀 속성 → 표 → 쪽 경계에서’를 ‘셀 단위로 나눔’으로 바꾸는 방법이 있습니다.`, where:loc});
+      }
+      if(!info.treatAsChar && info.pageBreak==="TABLE" && info.maxRow>body*0.95){
+        findings.push({rule:"T2",level:"hi",title:"행 단위로 넘기는 표에 한 쪽보다 긴 행이 있습니다",
+          text:`가장 긴 행의 추정 높이 약 ${Math.round(R)}mm, 본문 영역 높이 약 ${Math.round(B)}mm. ‘쪽 경계에서: 나눔(행 단위)’ 표는 행 하나를 쪽 사이에서 나누지 않아, 한 쪽보다 긴 행은 아래가 잘립니다. ‘셀 단위로 나눔’으로 바꾸거나 긴 칸을 여러 행으로 나누는 방법이 있습니다.`, where:loc});
+      }
+    }
+  }
+  return {name:file.name,findings,tables,sections:secFiles.length};
+}
+
+/* ---------- render ---------- */
+function tidy(t){return String(t).replace(/‘([^’]{1,14})’/g,(m,x)=>"‘"+x.replace(/ /g,"\u00a0")+"’").replace(/’(?=[가-힣])/g,"’\u2060");}
+function el(tag,attrs,...children){
+  const e=document.createElement(tag);
+  if(attrs) for(const[k,v] of Object.entries(attrs)){ if(k==="class") e.className=v; else e.setAttribute(k,v); }
+  for(const c of children){ if(c==null) continue; e.append(c.nodeType?c:document.createTextNode(tidy(c))); }
+  return e;
+}
+function render(runs){
+  resultsEl.replaceChildren();
+  for(const r of runs){
+    resultsEl.append(el("h2",null,r.name));
+    if(r.error){ resultsEl.append(el("div",{class:"summary warn"},r.error)); continue; }
+    const n=r.findings.length;
+    if(n){
+      resultsEl.append(el("div",{class:"summary warn"},`살펴볼 신호 ${n}개 · 표 ${r.tables}개 · 섹션 ${r.sections}개를 봤습니다`));
+      for(const f of r.findings){
+        resultsEl.append(el("div",{class:"finding"},
+          el("div",{class:"head"},el("span",{class:"tag "+f.level},f.level==="hi"?"위험 신호":"주의"),el("span",{class:"mono id"},f.rule),el("b",null,f.title)),
+          el("div",{class:"body"},el("p",null,f.text),el("p",{class:"where"},"볼 곳: "+f.where))));
+      }
+    } else {
+      resultsEl.append(el("div",{class:"summary ok"},`검사한 규칙에서 이상을 찾지 못했습니다 · 표 ${r.tables}개 · 섹션 ${r.sections}개`));
+    }
+    resultsEl.append(el("div",{class:"honest"},"한글 2024에서 직접 열거나 그려 보지 않았습니다. 경고가 있어도 정상일 수 있고, 경고가 없어도 깨질 수 있습니다. 제출 전에는 한글에서 표 끝, 쪽수, 서명 위치를 직접 확인하세요."));
+  }
+  lastRun=runs;
+  $("#report").classList.toggle("hidden",!runs.some(r=>!r.error));
+  updateSend();
+}
+async function handle(files){
+  files=[...files].filter(Boolean); if(!files.length) return;
+  statusEl.textContent="읽는 중…";
+  const runs=[];
+  for(const f of files){
+    try{ runs.push(await checkFile(f)); }catch(e){ runs.push({name:f.name,error:e.message||String(e)}); }
+  }
+  statusEl.textContent=`${files.length}개 파일을 점검했습니다. 파일은 이 브라우저 밖으로 나가지 않았습니다.`;
+  render(runs);
+}
+
+/* ---------- report (opt-in) ---------- */
+function summaryText(){
+  const res=(document.querySelector('input[name=res]:checked')||{}).value||"(고르지 않음)";
+  const rules={}; let files=0, sig=0;
+  for(const r of (lastRun||[])){ if(r.error) continue; files++; for(const f of r.findings){ rules[f.rule]=(rules[f.rule]||0)+1; sig++; } }
+  const ruleTxt=Object.keys(rules).length?Object.entries(rules).map(([k,v])=>`${k}×${v}`).join(", "):"없음";
+  const memo=$("#memo").value.trim();
+  return {res, text:[
+    `한글 결과: ${res}`,
+    `점검기 경고: ${ruleTxt}`,
+    `점검한 파일 수: ${files}`,
+    `한글 버전: ${$("#hv").value||"(고르지 않음)"}`,
+    `만든 방법: ${$("#tool").value||"(고르지 않음)"}`,
+    memo?`메모: ${memo}`:null,
+    `점검기 버전: 2026-11-25`
+  ].filter(Boolean).join("\n")};
+}
+function updateSend(){
+  const s=summaryText();
+  $("#sendPreview").textContent=s.text;
+  const title=`[한글 결과] ${s.res}`;
+  $("#sendGh").href=REPO_ISSUE+"?labels=hangul-result&title="+encodeURIComponent(title)+"&body="+encodeURIComponent(s.text);
+  $("#sendMail").href="mailto:"+MAIL+"?subject="+encodeURIComponent("HWPX 사전점검 "+title)+"&body="+encodeURIComponent(s.text);
+}
+for(const x of ["#hv","#tool","#memo"]) $(x).addEventListener("input",updateSend);
+$("#resultOpts").addEventListener("change",updateSend);
+
+/* ---------- inputs ---------- */
+drop.addEventListener("click",()=>fileIn.click());
+drop.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();fileIn.click();}});
+fileIn.addEventListener("change",()=>{handle(fileIn.files);fileIn.value="";});
+drop.addEventListener("dragover",e=>{e.preventDefault();drop.classList.add("over");});
+drop.addEventListener("dragleave",()=>drop.classList.remove("over"));
+drop.addEventListener("drop",e=>{e.preventDefault();drop.classList.remove("over");handle(e.dataTransfer.files);});
+for(const b of document.querySelectorAll("[data-sample]")){
+  b.addEventListener("click",async()=>{
+    const name=b.getAttribute("data-sample");
+    try{
+      statusEl.textContent="예시 파일을 불러오는 중…";
+      let blob;
+      if(window.__SAMPLES&&window.__SAMPLES[name]){ const bin=atob(window.__SAMPLES[name]); const u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i); blob=new Blob([u]); }
+      else { const resp=await fetch("samples/"+encodeURIComponent(name)); if(!resp.ok) throw new Error("예시 파일을 불러오지 못했습니다."); blob=await resp.blob(); }
+      await handle([new File([blob],name)]);
+    }catch(e){ statusEl.textContent=e.message; }
+  });
+}
+updateSend();
+})();
+</script>
+</body>
+</html>
